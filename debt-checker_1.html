@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ตรวจสอบลูกหนี้ — ไถ่เชียงกรุ๊ป</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --surface: #1a1d27;
+  --border: #2a2d3a; --border2: #363a4a;
+  --accent: #e8a838; --accent2: #4f9cf9;
+  --danger: #f05252; --warn: #f59e0b;
+  --text: #e2e8f0; --muted: #7a8099; --font: 'Sarabun', sans-serif;
+  --co-h: #f59e0b; --co-r: #4f9cf9; --co-v: #34d399; --co-l: #c084fc;
+}
+body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+/* ── Login ── */
+#loginScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-box {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 40px 36px; width: 100%; max-width: 380px; text-align: center;
+}
+.login-logo {
+  width: 56px; height: 56px; background: var(--accent); border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 800; color: #000; margin: 0 auto 20px;
+}
+.login-box h1 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+.login-box p { font-size: 13px; color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+.login-box label { display: block; font-size: 12px; color: var(--muted); text-align: left; margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; }
+.login-box input[type=password] {
+  width: 100%; padding: 12px 16px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-family: var(--font); font-size: 22px;
+  letter-spacing: .4em; outline: none; transition: border-color .2s; text-align: center; margin-bottom: 14px;
+}
+.login-box input:focus { border-color: var(--accent); }
+.login-btn {
+  width: 100%; padding: 13px; background: var(--accent); border: none; border-radius: 8px;
+  color: #000; font-family: var(--font); font-size: 15px; font-weight: 700; cursor: pointer; transition: opacity .2s;
+}
+.login-btn:hover { opacity: .85; }
+.login-error { color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 20px; }
+
+/* ── App shell ── */
+#app { display: none; }
+#app.show { display: block; }
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 14px 24px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100;
+}
+.logo { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 800; color: #000; }
+.header-text h1 { font-size: 16px; font-weight: 700; }
+.header-text p { font-size: 11px; color: var(--muted); }
+.hspacer { flex: 1; }
+.logout-btn { padding: 6px 14px; background: transparent; border: 1px solid var(--border2); border-radius: 6px; color: var(--muted); font-family: var(--font); font-size: 12px; cursor: pointer; }
+.logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+/* ── Drive Panel ── */
+.drive-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 24px; margin-bottom: 24px;
+}
+.drive-panel h2 { font-size: 15px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+.drive-panel .sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+.drive-panel .sub code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--text); }
+
+.file-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-bottom: 20px; }
+.file-item {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+}
+.file-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border2); flex-shrink: 0; transition: background .3s, box-shadow .3s; }
+.file-item.ok .file-dot { background: #34d399; box-shadow: 0 0 6px #34d399; }
+.file-item.err .file-dot { background: var(--danger); }
+.file-item.loading .file-dot { background: var(--accent); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.file-info { min-width: 0; }
+.file-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-name.h { color: var(--co-h); } .file-name.r { color: var(--co-r); }
+.file-name.v { color: var(--co-v); } .file-name.l { color: var(--co-l); }
+.file-status { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.drive-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.btn-primary {
+  padding: 11px 22px; background: #4285f4; border: none; border-radius: 8px;
+  color: #fff; font-family: var(--font); font-size: 14px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; transition: opacity .2s;
+}
+.btn-primary:hover { opacity: .88; }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-secondary {
+  padding: 11px 18px; background: transparent; border: 1px solid var(--border2); border-radius: 8px;
+  color: var(--muted); font-family: var(--font); font-size: 13px; cursor: pointer; transition: all .15s;
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--text); }
+.drive-msg { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.drive-msg.ok { color: #34d399; } .drive-msg.err { color: var(--danger); }
+
+/* ── Setup Guide ── */
+.setup-guide {
+  background: rgba(66,133,244,.06); border: 1px solid rgba(66,133,244,.2);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 24px;
+}
+.setup-guide summary { font-size: 13px; font-weight: 700; color: var(--accent2); cursor: pointer; user-select: none; }
+.setup-guide .steps { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.step { display: flex; gap: 12px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.step-num { width: 22px; height: 22px; background: rgba(79,156,249,.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: var(--accent2); flex-shrink: 0; margin-top: 1px; }
+.step a { color: var(--accent2); text-decoration: none; }
+.step a:hover { text-decoration: underline; }
+.step code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--text); }
+
+/* ── Search/Filter/Stats ── */
+#dataSection { display: none; } #dataSection.show { display: block; }
+.search-wrap { position: relative; margin-bottom: 14px; }
+.search-wrap input {
+  width: 100%; padding: 13px 48px 13px 18px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); font-family: var(--font); font-size: 16px; outline: none; transition: border-color .2s;
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap input::placeholder { color: var(--muted); }
+.search-icon { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.filters { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.pill { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-family: var(--font); font-size: 13px; cursor: pointer; transition: all .15s; white-space: nowrap; }
+.pill.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
+.pill:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+.pill[data-co="dup"].active { background: var(--danger); border-color: var(--danger); color: #fff; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.stat-value { font-size: 20px; font-weight: 800; }
+.sv-blue { color: var(--accent2); } .sv-warn { color: var(--warn); } .sv-danger { color: var(--danger); }
+.dup-banner { background: rgba(240,82,82,.06); border: 1px solid rgba(240,82,82,.25); border-radius: 10px; padding: 14px 16px; margin-bottom: 18px; }
+.dup-banner h3 { color: var(--danger); font-size: 13px; margin-bottom: 10px; }
+.dup-item { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.dup-item:last-child { border-bottom: none; padding-bottom: 0; }
+.dup-name { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+.dup-entries { display: flex; flex-wrap: wrap; gap: 6px; }
+.dup-tag { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(255,255,255,.06); }
+.results-meta { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.result-list { display: flex; flex-direction: column; gap: 7px; }
+.result-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; transition: border-color .15s; }
+.result-item:hover { border-color: var(--border2); }
+.result-item.dup-flag { border-color: rgba(240,82,82,.35); }
+.result-item.dup-flag:hover { border-color: var(--danger); }
+.ri-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.ri-name { font-size: 14px; font-weight: 600; line-height: 1.4; }
+.ri-bal { font-size: 15px; font-weight: 800; white-space: nowrap; }
+.ri-bal.pos { color: var(--danger); } .ri-bal.zero { color: var(--muted); }
+.ri-meta { display: flex; gap: 7px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 700; }
+.badge.h { color: var(--co-h); background: rgba(245,158,11,.12); }
+.badge.r { color: var(--co-r); background: rgba(79,156,249,.12); }
+.badge.v { color: var(--co-v); background: rgba(52,211,153,.12); }
+.badge.l { color: var(--co-l); background: rgba(192,132,252,.12); }
+.ri-id { font-size: 11px; color: var(--muted); }
+.dup-flag-label { font-size: 11px; color: var(--danger); }
+.empty { text-align: center; color: var(--muted); padding: 50px 20px; }
+.empty .icon { font-size: 36px; margin-bottom: 10px; }
+@media (max-width: 520px) { .file-list { grid-template-columns: 1fr 1fr; } header { padding: 12px 14px; } main { padding: 16px 12px; } .login-box { padding: 28px 18px; } }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">ถ</div>
+    <h1>ไถ่เชียงกรุ๊ป</h1>
+    <p>ระบบตรวจสอบลูกหนี้<br>กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน</p>
+    <label>รหัสผ่าน</label>
+    <input type="password" id="codeInput" placeholder="••••" maxlength="20" autocomplete="off">
+    <button class="login-btn" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="logo">ถ</div>
+    <div class="header-text">
+      <h1>ระบบตรวจสอบลูกหนี้</h1>
+      <p id="headerSub">ไถ่เชียงกรุ๊ป</p>
+    </div>
+    <div class="hspacer"></div>
+    <button class="logout-btn" id="logoutBtn">ออกจากระบบ</button>
+  </header>
+
+  <main>
+
+    <!-- Setup Guide (collapsible) -->
+    <details class="setup-guide" id="setupGuide">
+      <summary>⚙️ วิธีตั้งค่าครั้งแรก (คลิกเพื่อดู)</summary>
+      <div class="steps">
+        <div class="step"><div class="step-num">1</div><div>ไปที่ <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> → สร้าง Project ใหม่</div></div>
+        <div class="step"><div class="step-num">2</div><div>เปิด <b>APIs & Services → Library</b> → ค้นหา <b>Google Drive API</b> → Enable</div></div>
+        <div class="step"><div class="step-num">3</div><div>ไปที่ <b>APIs & Services → OAuth consent screen</b> → เลือก External → กรอกชื่อแอป → Save</div></div>
+        <div class="step"><div class="step-num">4</div><div>ไปที่ <b>Credentials → Create Credentials → OAuth 2.0 Client ID</b> → เลือก <b>Web application</b><br>
+          ใส่ Authorized JavaScript origins: <code>https://thatgoogoh.github.io</code></div></div>
+        <div class="step"><div class="step-num">5</div><div>คัดลอก <b>Client ID</b> ที่ได้ → เปิดไฟล์ <code>debt-checker.html</code> → หาบรรทัด <code>GOOGLE_CLIENT_ID</code> → วางแทน</div></div>
+        <div class="step"><div class="step-num">6</div><div>สร้างโฟลเดอร์ชื่อ <code>claude</code> ใน Google Drive → วางไฟล์ Excel ทั้ง 4 บริษัทตามชื่อที่กำหนด</div></div>
+        <div class="step"><div class="step-num">7</div><div>Push ไฟล์ขึ้น GitHub → เปิดจาก GitHub Pages → กด "เชื่อมต่อ Google" ✅</div></div>
+      </div>
+    </details>
+
+    <!-- Drive Panel -->
+    <div class="drive-panel">
+      <h2>📁 Google Drive <span style="font-size:12px;font-weight:400;color:var(--muted);margin-left:4px">โฟลเดอร์ /claude</span></h2>
+      <div class="sub">
+        ดึงข้อมูลอัตโนมัติจากไฟล์ใน Google Drive โฟลเดอร์ <code>claude</code><br>
+        พนักงานบัญชี Save ทับไฟล์เดิมทุกเดือน → กด "โหลดข้อมูล" ใหม่ได้เลย
+      </div>
+
+      <div class="file-list">
+        <div class="file-item" id="fi-h">
+          <div class="file-dot"></div>
+          <div class="file-info"><div class="file-name h">โฮมแม็กซ์</div><div class="file-status" id="fs-h">ไถ่เชียงโฮมแม็กซ์.xlsx</div></div>
+        </div>
+        <div class="file-item" id="fi-r">
+          <div class="file-dot"></div>
+          <div class="file-info"><div class="file-name r">ระนอง</div><div class="file-status" id="fs-r">ไถ่เชียงระนอง.xlsx</div></div>
+        </div>
+        <div class="file-item" id="fi-v">
+          <div class="file-dot"></div>
+          <div class="file-info"><div class="file-name v">วัสดุ</div><div class="file-status" id="fs-v">ไถ่เชียงวัสดุ.xlsx</div></div>
+        </div>
+        <div class="file-item" id="fi-l">
+          <div class="file-dot"></div>
+          <div class="file-info"><div class="file-name l">หลังสวน</div><div class="file-status" id="fs-l">ไถ่เชียงหลังสวน.xlsx</div></div>
+        </div>
+      </div>
+
+      <div class="drive-actions">
+        <button class="btn-primary" id="btnConnect">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          เชื่อมต่อ Google
+        </button>
+        <button class="btn-secondary" id="btnLoad" style="display:none">🔄 โหลดข้อมูลใหม่</button>
+        <button class="btn-secondary" id="btnDisconnect" style="display:none">ยกเลิกการเชื่อมต่อ</button>
+        <span class="drive-msg" id="driveMsg"></span>
+      </div>
+    </div>
+
+    <!-- Data Section -->
+    <div id="dataSection">
+      <div class="search-wrap">
+        <input type="text" id="search" placeholder="ค้นหาชื่อลูกค้า หรือรหัสลูกค้า..." autocomplete="off">
+        <span class="search-icon">🔍</span>
+      </div>
+      <div class="filters" id="filters">
+        <button class="pill active" data-co="all">ทั้งหมด</button>
+        <button class="pill" data-co="โฮมแม็กซ์">🟡 โฮมแม็กซ์</button>
+        <button class="pill" data-co="ระนอง">🔵 ระนอง</button>
+        <button class="pill" data-co="วัสดุ">🟢 วัสดุ</button>
+        <button class="pill" data-co="หลังสวน">🟣 หลังสวน</button>
+        <button class="pill" data-co="dup">⚠️ ซ้ำข้ามบริษัท</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div id="dupBannerWrap"></div>
+      <div class="results-meta" id="resultsMeta"></div>
+      <div class="result-list" id="resultList"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  CONFIG — แก้ไข CLIENT_ID หลัง setup Google Cloud
+// ════════════════════════════════════════════════
+const GOOGLE_CLIENT_ID = '633205692679-1k8ot4v041iuuudbmqojuqoffd2b6d9k.apps.googleusercontent.com';
+const FOLDER_NAME      = 'TCG Data';
+const SECRET           = '7955';
+const FILES = [
+  { key: 'h', company: 'โฮมแม็กซ์', filename: 'ไถ่เชียงโฮมแม็กซ์.xlsx' },
+  { key: 'r', company: 'ระนอง',     filename: 'ไถ่เชียงระนอง.xlsx'     },
+  { key: 'v', company: 'วัสดุ',     filename: 'ไถ่เชียงวัสดุ.xlsx'     },
+  { key: 'l', company: 'หลังสวน',   filename: 'ไถ่เชียงหลังสวน.xlsx'   },
+];
+
+// ════════════════════════════════════════════════
+//  LOGIN
+// ════════════════════════════════════════════════
+const SESSION_KEY = 'tc_auth';
+if (sessionStorage.getItem(SESSION_KEY) === '1') showApp();
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('logoutBtn').addEventListener('click', () => { sessionStorage.removeItem(SESSION_KEY); location.reload(); });
+
+function doLogin() {
+  const val = document.getElementById('codeInput').value.trim();
+  if (val === SECRET) {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    document.getElementById('loginError').textContent = '';
+    showApp();
+  } else {
+    document.getElementById('loginError').textContent = '❌ รหัสผ่านไม่ถูกต้อง';
+    document.getElementById('codeInput').value = '';
+    document.getElementById('codeInput').focus();
+  }
+}
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  initGoogleAuth();
+}
+
+// ════════════════════════════════════════════════
+//  GOOGLE AUTH (GSI)
+// ════════════════════════════════════════════════
+let accessToken = null;
+
+function initGoogleAuth() {
+  if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com') {
+    setMsg('⚠️ ยังไม่ได้ตั้งค่า Client ID — ดูคำแนะนำด้านบน', 'err');
+    document.getElementById('setupGuide').open = true;
+    return;
+  }
+  // Load GSI script
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.onload = () => {
+    // Check saved token in session
+    const saved = sessionStorage.getItem('tc_gtoken');
+    if (saved) { accessToken = saved; onTokenReady(); }
+    else { document.getElementById('btnConnect').style.display = 'flex'; }
+  };
+  document.head.appendChild(s);
+}
+
+document.getElementById('btnConnect').addEventListener('click', () => {
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    callback: (resp) => {
+      if (resp.error) { setMsg('❌ ยกเลิกการเชื่อมต่อ', 'err'); return; }
+      accessToken = resp.access_token;
+      sessionStorage.setItem('tc_gtoken', accessToken);
+      onTokenReady();
+    }
+  });
+  client.requestAccessToken();
+});
+
+document.getElementById('btnDisconnect').addEventListener('click', () => {
+  accessToken = null;
+  sessionStorage.removeItem('tc_gtoken');
+  document.getElementById('btnConnect').style.display = 'flex';
+  document.getElementById('btnLoad').style.display = 'none';
+  document.getElementById('btnDisconnect').style.display = 'none';
+  setMsg('ยกเลิกการเชื่อมต่อแล้ว');
+  FILES.forEach(f => setFileState(f.key, 'idle', f.filename));
+  allData = []; DUPS = {};
+  document.getElementById('dataSection').className = '';
+});
+
+document.getElementById('btnLoad').addEventListener('click', loadAllFiles);
+
+function onTokenReady() {
+  document.getElementById('btnConnect').style.display = 'none';
+  document.getElementById('btnLoad').style.display = 'inline-flex';
+  document.getElementById('btnDisconnect').style.display = 'inline-flex';
+  setMsg('✅ เชื่อมต่อ Google แล้ว', 'ok');
+  loadAllFiles();
+}
+
+// ════════════════════════════════════════════════
+//  DRIVE API
+// ════════════════════════════════════════════════
+async function driveGet(url) {
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (r.status === 401) { accessToken = null; sessionStorage.removeItem('tc_gtoken'); throw new Error('token_expired'); }
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r;
+}
+
+async function findFolder(name) {
+  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const r = await driveGet(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=5`);
+  const j = await r.json();
+  return j.files && j.files.length > 0 ? j.files[0] : null;
+}
+
+async function findFileInFolder(folderId, filename) {
+  const q = encodeURIComponent(`name='${filename}' and '${folderId}' in parents and trashed=false`);
+  const r = await driveGet(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&pageSize=5`);
+  const j = await r.json();
+  return j.files && j.files.length > 0 ? j.files[0] : null;
+}
+
+async function downloadFile(fileId) {
+  const r = await driveGet(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  return r.arrayBuffer();
+}
+
+async function loadAllFiles() {
+  const btn = document.getElementById('btnLoad');
+  btn.disabled = true;
+  setMsg('กำลังโหลด...', '');
+  FILES.forEach(f => setFileState(f.key, 'loading', 'กำลังค้นหา...'));
+
+  try {
+    const folder = await findFolder(FOLDER_NAME);
+    if (!folder) {
+      setMsg(`❌ ไม่พบโฟลเดอร์ "${FOLDER_NAME}" ใน Google Drive`, 'err');
+      FILES.forEach(f => setFileState(f.key, 'err', 'ไม่พบโฟลเดอร์'));
+      btn.disabled = false; return;
+    }
+
+    let loaded = 0;
+    await Promise.all(FILES.map(async (f) => {
+      try {
+        setFileState(f.key, 'loading', 'กำลังดาวน์โหลด...');
+        const file = await findFileInFolder(folder.id, f.filename);
+        if (!file) { setFileState(f.key, 'err', '❌ ไม่พบไฟล์ใน Drive'); return; }
+        const ab = await downloadFile(file.id);
+        const data = parseExcel(ab, f.company);
+        store[f.company] = data;
+        const d = new Date(file.modifiedTime);
+        const dateStr = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' });
+        setFileState(f.key, 'ok', `${data.length.toLocaleString()} รายการ · อัปเดต ${dateStr}`);
+        loaded++;
+      } catch (e) {
+        setFileState(f.key, 'err', '❌ โหลดไม่สำเร็จ');
+        console.error(f.filename, e);
+      }
+    }));
+
+    if (loaded > 0) {
+      rebuild();
+      const now = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      setMsg(`✅ โหลดสำเร็จ ${loaded}/4 บริษัท · ${now}`, 'ok');
+    } else {
+      setMsg('❌ ไม่สามารถโหลดไฟล์ได้เลย', 'err');
+    }
+  } catch (e) {
+    if (e.message === 'token_expired') {
+      setMsg('⚠️ Token หมดอายุ กรุณาเชื่อมต่อใหม่', 'err');
+      document.getElementById('btnConnect').style.display = 'flex';
+      document.getElementById('btnLoad').style.display = 'none';
+      document.getElementById('btnDisconnect').style.display = 'none';
+    } else {
+      setMsg('❌ เกิดข้อผิดพลาด: ' + e.message, 'err');
+    }
+  }
+  btn.disabled = false;
+}
+
+function setFileState(key, state, text) {
+  const item = document.getElementById('fi-' + key);
+  item.className = 'file-item ' + state;
+  document.getElementById('fs-' + key).textContent = text;
+}
+
+function setMsg(text, type) {
+  const el = document.getElementById('driveMsg');
+  el.textContent = text;
+  el.className = 'drive-msg' + (type ? ' ' + type : '');
+}
+
+// ════════════════════════════════════════════════
+//  DATA PROCESSING
+// ════════════════════════════════════════════════
+const CLS_MAP = { โฮมแม็กซ์: 'h', ระนอง: 'r', วัสดุ: 'v', หลังสวน: 'l' };
+const store = { โฮมแม็กซ์: [], ระนอง: [], วัสดุ: [], หลังสวน: [] };
+let allData = [], DUPS = {}, activeFilter = 'all', searchTerm = '';
+
+function parseExcel(ab, company) {
+  const wb = XLSX.read(new Uint8Array(ab), { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  let hi = rows.findIndex(r => r.some(c => String(c).includes('ชื่อลูกค้า')));
+  if (hi < 0) hi = 3;
+  const h = rows[hi];
+  const iN = h.findIndex(c => String(c).includes('ชื่อลูกค้า'));
+  const iI = h.findIndex(c => String(c).includes('รหัสลูกค้า'));
+  const iB = h.findIndex(c => String(c).includes('ยอดยกไป'));
+  const result = [];
+  for (let i = hi + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const name = String(row[iN] || '').trim();
+    const id   = String(row[iI] || '').trim();
+    if (!name || !id) continue;
+    result.push({ n: name, id, b: parseFloat(row[iB]) || 0, c: company });
+  }
+  return result;
+}
+
+function norm(s) {
+  return s.replace(/บริษัท|จำกัด|มหาชน|หจก\.?|คุณ|นาย|นาง|นส\.|บจก\.?|ร้าน|ห้างหุ้นส่วน/g, '')
+    .replace(/\s+/g, ' ').replace(/[()（）.,·]/g, '').trim().toLowerCase();
+}
+function buildDups(data) {
+  const g = {};
+  data.forEach(r => { const k = norm(r.n); if (k.length < 2) return; (g[k] = g[k] || []).push(r); });
+  const d = {};
+  Object.entries(g).forEach(([k, rows]) => { if (new Set(rows.map(r => r.c)).size >= 2) d[k] = rows; });
+  return d;
+}
+function isDup(r) { return norm(r.n) in DUPS; }
+function fmt(n) { return n === 0 ? '—' : n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ฿'; }
+
+function getFiltered() {
+  let list = allData;
+  if (activeFilter === 'dup') list = list.filter(isDup);
+  else if (activeFilter !== 'all') list = list.filter(r => r.c === activeFilter);
+  if (searchTerm) { const q = searchTerm.toLowerCase(); list = list.filter(r => r.n.toLowerCase().includes(q) || r.id.toLowerCase().includes(q)); }
+  return list;
+}
+
+function render() {
+  const list = getFiltered();
+  const withDebt = list.filter(r => r.b > 0).length;
+  const total = list.reduce((s, r) => s + (r.b > 0 ? r.b : 0), 0);
+  const dups = list.filter(isDup).length;
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card"><div class="stat-label">รายการทั้งหมด</div><div class="stat-value sv-blue">${list.length.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">มียอดค้างชำระ</div><div class="stat-value sv-warn">${withDebt.toLocaleString()}</div></div>
+    <div class="stat-card"><div class="stat-label">ยอดรวมค้างชำระ</div><div class="stat-value sv-danger">${total > 0 ? total.toLocaleString('th-TH', { maximumFractionDigits: 0 }) + ' ฿' : '—'}</div></div>
+    <div class="stat-card"><div class="stat-label">ซ้ำข้ามบริษัท</div><div class="stat-value ${dups > 0 ? 'sv-danger' : 'sv-blue'}">${dups.toLocaleString()}</div></div>`;
+  const wrap = document.getElementById('dupBannerWrap');
+  const visKeys = new Set(list.filter(isDup).map(r => norm(r.n)));
+  const rel = Object.entries(DUPS).filter(([k]) => visKeys.has(k));
+  if (!rel.length) { wrap.innerHTML = ''; }
+  else {
+    const items = rel.slice(0, 10).map(([, rows]) => {
+      const entries = rows.map(r => `<span class="dup-tag"><b style="color:var(--co-${CLS_MAP[r.c]})">${r.c}</b> ${r.id}${r.b ? ' · <b>' + fmt(r.b) + '</b>' : ''}</span>`).join('');
+      return `<div class="dup-item"><div class="dup-name">${rows[0].n}</div><div class="dup-entries">${entries}</div></div>`;
+    }).join('');
+    const more = rel.length > 10 ? `<p style="font-size:12px;color:var(--muted);margin-top:8px">และอีก ${rel.length - 10} รายการ…</p>` : '';
+    wrap.innerHTML = `<div class="dup-banner"><h3>⚠️ พบรายชื่อซ้ำ/คล้ายกันข้ามบริษัท (${rel.length} ราย)</h3>${items}${more}</div>`;
+  }
+  const el = document.getElementById('resultList');
+  const shown = list.slice(0, 150);
+  document.getElementById('resultsMeta').textContent = `แสดง ${shown.length} จาก ${list.length.toLocaleString()} รายการ`;
+  if (!list.length) { el.innerHTML = `<div class="empty"><div class="icon">🔍</div><p>ไม่พบข้อมูลที่ค้นหา</p></div>`; return; }
+  el.innerHTML = shown.map(r => {
+    const cls = CLS_MAP[r.c]; const dup = isDup(r);
+    return `<div class="result-item${dup ? ' dup-flag' : ''}">
+      <div class="ri-top"><div class="ri-name">${r.n}</div><div class="ri-bal ${r.b > 0 ? 'pos' : 'zero'}">${fmt(r.b)}</div></div>
+      <div class="ri-meta"><span class="badge ${cls}">${r.c}</span><span class="ri-id">${r.id}</span>${dup ? '<span class="dup-flag-label">⚠️ ซ้ำข้ามบริษัท</span>' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+function rebuild() {
+  allData = Object.values(store).flat();
+  DUPS = buildDups(allData);
+  document.getElementById('dataSection').className = allData.length > 0 ? 'show' : '';
+  if (allData.length > 0) render();
+}
+
+document.getElementById('search').addEventListener('input', e => { searchTerm = e.target.value.trim(); render(); });
+document.getElementById('filters').addEventListener('click', e => {
+  const btn = e.target.closest('.pill'); if (!btn) return;
+  document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); activeFilter = btn.dataset.co; render();
+});
+</script>
+</body>
+</html>
